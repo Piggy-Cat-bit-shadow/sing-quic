@@ -215,18 +215,6 @@ func (c *Client) offer(ctx context.Context) (*clientQUICConnection, error) {
 	}
 }
 
-func (c *Client) offerWithStream(ctx context.Context) (*clientQUICConnection, error) {
-	for {
-		conn, err := c.offer(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if conn.acquireStream() {
-			return conn, nil
-		}
-	}
-}
-
 func (c *Client) completeOffer(pending *clientOffer, offerCtx context.Context) {
 	conn, err := c.offerNew(offerCtx)
 	pending.cancel(nil)
@@ -625,7 +613,11 @@ func (c *Client) authenticateAndWrap(ctx context.Context, rawConn io.Closer, cre
 }
 
 func (c *Client) DialConn(ctx context.Context, destination M.Socksaddr) (net.Conn, error) {
-	conn, err := c.offerWithStream(ctx)
+	conn, err := c.offer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = conn.acquireStream()
 	if err != nil {
 		return nil, err
 	}
@@ -707,10 +699,10 @@ func (c *Client) CloseIdleConnections() {
 		return
 	}
 	conn.access.Lock()
-	closed := conn.streams == 0 && len(conn.udpConnMap) == 0 && conn.markClosedLocked(os.ErrClosed)
+	drained := conn.streams == 0 && len(conn.udpConnMap) == 0
 	conn.access.Unlock()
-	if closed {
-		conn.closeTransport()
+	if drained {
+		conn.closeWithError(os.ErrClosed)
 	}
 }
 
@@ -726,6 +718,7 @@ type clientOffer struct {
 type clientQUICConnection struct {
 	quicConn     *quic.Conn
 	rawConn      io.Closer
+	closeOnce    sync.Once
 	connDone     chan struct{}
 	connErr      error
 	udpDisabled  bool
@@ -750,67 +743,52 @@ func (c *clientQUICConnection) active() bool {
 	return true
 }
 
-func (c *clientQUICConnection) acquireStream() bool {
+func (c *clientQUICConnection) acquireStream() error {
 	c.access.Lock()
 	defer c.access.Unlock()
 	select {
 	case <-c.connDone:
-		return false
+		return E.Errors(c.connErr, os.ErrClosed)
 	default:
 	}
 	c.streams++
-	return true
+	return nil
 }
 
 func (c *clientQUICConnection) releaseStream(keepSession bool) {
 	c.access.Lock()
 	c.streams--
-	closed := c.closeIdle.Load() && !keepSession && c.streams == 0 && len(c.udpConnMap) == 0 && c.markClosedLocked(os.ErrClosed)
+	drained := c.closeIdle.Load() && !keepSession && c.streams == 0 && len(c.udpConnMap) == 0
 	c.access.Unlock()
-	if closed {
-		c.closeTransport()
+	if drained {
+		c.closeWithError(os.ErrClosed)
 	}
 }
 
 func (c *clientQUICConnection) releaseUDPSession(sessionID uint32) {
 	c.access.Lock()
 	delete(c.udpConnMap, sessionID)
-	closed := c.closeIdle.Load() && c.streams == 0 && len(c.udpConnMap) == 0 && c.markClosedLocked(os.ErrClosed)
+	drained := c.closeIdle.Load() && c.streams == 0 && len(c.udpConnMap) == 0
 	c.access.Unlock()
-	if closed {
-		c.closeTransport()
+	if drained {
+		c.closeWithError(os.ErrClosed)
 	}
-}
-
-func (c *clientQUICConnection) markClosedLocked(err error) bool {
-	select {
-	case <-c.connDone:
-		return false
-	default:
-	}
-	c.connErr = err
-	close(c.connDone)
-	return true
 }
 
 func (c *clientQUICConnection) closeWithError(err error) {
-	c.access.Lock()
-	if !c.markClosedLocked(err) {
+	c.closeOnce.Do(func() {
+		c.connErr = err
+		c.access.Lock()
+		close(c.connDone)
+		udpConnMap := c.udpConnMap
+		c.udpConnMap = make(map[uint32]*udpPacketConn)
 		c.access.Unlock()
-		return
-	}
-	udpConnMap := c.udpConnMap
-	c.udpConnMap = make(map[uint32]*udpPacketConn)
-	c.access.Unlock()
-	for _, udpConn := range udpConnMap {
-		udpConn.closeWithError(err)
-	}
-	c.closeTransport()
-}
-
-func (c *clientQUICConnection) closeTransport() {
-	_ = c.quicConn.CloseWithError(0, "")
-	_ = c.rawConn.Close()
+		for _, udpConn := range udpConnMap {
+			udpConn.closeWithError(err)
+		}
+		_ = c.quicConn.CloseWithError(0, "")
+		_ = c.rawConn.Close()
+	})
 }
 
 type clientConn struct {
