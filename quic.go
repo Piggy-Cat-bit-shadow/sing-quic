@@ -23,7 +23,22 @@ type QUICOptions struct {
 	ConnectionReceiveWindow uint64
 	MaxConcurrentStreams    int
 	InitialPacketSize       int
-	DisablePathMTUDiscovery bool
+	// InitialPacketSizeCeiling is the largest UDP payload this connection may put
+	// on the wire, when the caller has PROVED the path cannot carry more.
+	//
+	// It is separate from InitialPacketSize because the two are different kinds of
+	// statement: InitialPacketSize is a preference the QUIC implementation may
+	// legitimately replace (ChromeParrot pins a fingerprint size), while a ceiling
+	// describes the tunnel underneath and must survive every replacement.
+	//
+	// 0 means no ceiling. The value is passed through unchanged - in particular it
+	// is NOT raised to the QUIC minimum. A path that cannot carry a 1200-byte
+	// Initial packet cannot carry a QUIC handshake at all, and the caller that
+	// established that is the one that has to refuse the configuration, with a
+	// message naming the tunnel. Raising it here would send a packet the caller
+	// proved the path drops, and the failure would surface far from its cause.
+	InitialPacketSizeCeiling int
+	DisablePathMTUDiscovery  bool
 }
 
 type Config interface {
@@ -72,10 +87,26 @@ func ApplyQUICOptions(quicConfig *quic.Config, options QUICOptions) {
 	if options.InitialPacketSize > 0 {
 		quicConfig.InitialPacketSize = uint16(options.InitialPacketSize)
 	}
+	if options.InitialPacketSizeCeiling > 0 {
+		// Passed through as an integer and converted once, so a caller that
+		// computed a value the field cannot hold sees it here rather than as a
+		// silently truncated ceiling. The field is a uint16 in quic-go because a
+		// UDP payload cannot exceed 65535 bytes; anything larger is a caller error,
+		// and clamping it to the maximum is the conservative direction (a smaller
+		// ceiling is never less safe than a larger one).
+		if options.InitialPacketSizeCeiling > maxUint16 {
+			quicConfig.InitialPacketSizeCeiling = maxUint16
+		} else {
+			quicConfig.InitialPacketSizeCeiling = uint16(options.InitialPacketSizeCeiling)
+		}
+	}
 	if options.DisablePathMTUDiscovery {
 		quicConfig.DisablePathMTUDiscovery = true
 	}
 }
+
+// maxUint16 is the largest value quic.Config.InitialPacketSizeCeiling can hold.
+const maxUint16 = 1<<16 - 1
 
 func SetDesiredBufferSizes(conn any) {
 	// quic-go's internal protocol.DesiredReceiveBufferSize and protocol.DesiredSendBufferSize.
