@@ -311,11 +311,7 @@ func (c *udpPacketConn) writePackets(messages []*udpMessage) error {
 func (c *udpPacketConn) writePacket(message *udpMessage) error {
 	if !c.udpStream {
 		buffer := message.pack()
-		err := c.quicConn.SendDatagram(buffer.Bytes())
-		buffer.Release()
-		if err != nil {
-			return err
-		}
+		return sendOwnedDatagram(c.quicConn, buffer.Bytes(), buffer)
 	} else {
 		stream, err := c.quicConn.OpenUniStream()
 		if err != nil {

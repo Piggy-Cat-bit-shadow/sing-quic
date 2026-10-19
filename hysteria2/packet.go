@@ -294,8 +294,7 @@ func (c *udpPacketConn) writePackets(messages []*udpMessage) error {
 
 func (c *udpPacketConn) writePacket(message *udpMessage) error {
 	buffer := message.pack()
-	defer buffer.Release()
-	return c.quicConn.SendDatagram(buffer.Bytes())
+	return sendOwnedDatagram(c.quicConn, buffer.Bytes(), buffer)
 }
 
 func (c *udpPacketConn) Close() error {
