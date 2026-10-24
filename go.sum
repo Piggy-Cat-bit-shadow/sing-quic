@@ -1,5 +1,5 @@
-github.com/Piggy-Cat-bit-shadow/quic-go v0.61.1-0.20261024061902-8929ebe587f5 h1:TBsOyZqVaCcyCJu/d92Ha++3NC9tpfgESXLHyPkRf6Y=
-github.com/Piggy-Cat-bit-shadow/quic-go v0.61.1-0.20261024061902-8929ebe587f5/go.mod h1:Y7IbYEm6E0KhhcxlLZjjxyAZy6Fkn0anFyiXYLqhqNg=
+github.com/Piggy-Cat-bit-shadow/quic-go v0.61.1-0.20261024063732-ce02ee5cc210 h1:mUsEMuBWVt7hMCXYhhrtI5IGoPPoProleZIY3MwWqoQ=
+github.com/Piggy-Cat-bit-shadow/quic-go v0.61.1-0.20261024063732-ce02ee5cc210/go.mod h1:Y7IbYEm6E0KhhcxlLZjjxyAZy6Fkn0anFyiXYLqhqNg=
 github.com/andybalholm/brotli v1.0.6 h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sxfOI=
 github.com/andybalholm/brotli v1.0.6/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
