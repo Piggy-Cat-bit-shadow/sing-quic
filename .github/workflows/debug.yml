@@ -26,12 +26,19 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ^1.24
+          # The product builds this module with the official Go 1.27.4 toolchain. The go
+          # directive in go.mod is a minimum language version, not the compiler used for
+          # release builds, so pin the shipping toolchain here: with `^1.24` the job never
+          # compiled the build-tagged Go 1.26/1.27 code paths in quic-go that the product
+          # actually runs.
+          go-version: '1.27.4'
+      - name: Toolchain
+        run: go version
       - name: Build
-        run: |
+        run: |-
           make test
-  build_go123:
-    name: Linux Debug build (Go 1.23)
+  build_minimum_go:
+    name: Linux Debug build (minimum Go version)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,10 +48,12 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ~1.23
+          go-version-file: go.mod
         continue-on-error: true
+      - name: Toolchain
+        run: go version
       - name: Build
-        run: |
+        run: |-
           make test
   build__windows:
     name: Windows Debug build
@@ -57,10 +66,12 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ^1.24
+          go-version: '1.27.4'
         continue-on-error: true
+      - name: Toolchain
+        run: go version
       - name: Build
-        run: |
+        run: |-
           make test
   build_darwin:
     name: macOS Debug build
@@ -73,8 +84,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: ^1.24
+          go-version: '1.27.4'
         continue-on-error: true
+      - name: Toolchain
+        run: go version
       - name: Build
-        run: |
+        run: |-
           make test
