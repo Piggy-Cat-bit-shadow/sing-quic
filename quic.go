@@ -21,8 +21,23 @@ type QUICOptions struct {
 	KeepAlivePeriod         time.Duration
 	StreamReceiveWindow     uint64
 	ConnectionReceiveWindow uint64
-	MaxConcurrentStreams    int
-	InitialPacketSize       int
+	// InitialStreamReceiveWindow / MaxStreamReceiveWindow, and the connection pair below, let a
+	// caller state the two receive windows SEPARATELY: the initial one is flow-control credit
+	// granted in the handshake and therefore bounds what a peer may put in flight against an
+	// application that is not reading; the maximum is only a local auto-tuning ceiling and is
+	// never advertised.
+	//
+	// StreamReceiveWindow / ConnectionReceiveWindow keep their exact previous meaning: ONE value
+	// for both windows of that level. They WIN when non-zero, because they are the operator's
+	// explicit configuration and must not be reinterpreted here; the split fields only fill a
+	// window the legacy field left alone. That ordering is what makes this addition invisible to
+	// every existing caller.
+	InitialStreamReceiveWindow     uint64
+	MaxStreamReceiveWindow         uint64
+	InitialConnectionReceiveWindow uint64
+	MaxConnectionReceiveWindow     uint64
+	MaxConcurrentStreams           int
+	InitialPacketSize              int
 	// InitialPacketSizeCeiling is the largest UDP payload this connection may put
 	// on the wire, when the caller has PROVED the path cannot carry more.
 	//
@@ -70,11 +85,33 @@ func ApplyQUICOptions(quicConfig *quic.Config, options QUICOptions) {
 	if options.StreamReceiveWindow != 0 {
 		quicConfig.InitialStreamReceiveWindow = options.StreamReceiveWindow
 		quicConfig.MaxStreamReceiveWindow = options.StreamReceiveWindow
+	} else {
+		if options.InitialStreamReceiveWindow != 0 {
+			quicConfig.InitialStreamReceiveWindow = options.InitialStreamReceiveWindow
+		}
+		if options.MaxStreamReceiveWindow != 0 {
+			quicConfig.MaxStreamReceiveWindow = options.MaxStreamReceiveWindow
+		}
 	}
 	if options.ConnectionReceiveWindow != 0 {
 		quicConfig.InitialConnectionReceiveWindow = options.ConnectionReceiveWindow
 		quicConfig.MaxConnectionReceiveWindow = options.ConnectionReceiveWindow
+	} else {
+		if options.InitialConnectionReceiveWindow != 0 {
+			quicConfig.InitialConnectionReceiveWindow = options.InitialConnectionReceiveWindow
+		}
+		if options.MaxConnectionReceiveWindow != 0 {
+			quicConfig.MaxConnectionReceiveWindow = options.MaxConnectionReceiveWindow
+		}
 	}
+	// A window whose ceiling sits below where it starts is not a smaller window, it is an
+	// inconsistent one: the initial value is advertised to the peer, so it cannot be lowered to
+	// the ceiling after the fact. Raising the ceiling to the initial value is the direction that
+	// keeps what the caller promised and makes growth monotone, and it is the same normalisation
+	// quic-go applies to its own pinned windows. Callers that get this wrong are visible here
+	// instead of as a connection whose window can never grow.
+	quicConfig.MaxStreamReceiveWindow = max(quicConfig.MaxStreamReceiveWindow, quicConfig.InitialStreamReceiveWindow)
+	quicConfig.MaxConnectionReceiveWindow = max(quicConfig.MaxConnectionReceiveWindow, quicConfig.InitialConnectionReceiveWindow)
 	if options.MaxConcurrentStreams > 0 {
 		quicConfig.MaxIncomingStreams = int64(options.MaxConcurrentStreams)
 	}
