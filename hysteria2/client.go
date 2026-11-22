@@ -888,3 +888,14 @@ func (c *clientConn) Close() error {
 	c.closeOnce.Do(func() { c.parent.releaseStream(c.keepSession) })
 	return err
 }
+
+// CloseWrite sends the QUIC stream FIN without cancelling the receive side. TCP
+// clients that shutdown(SHUT_WR) and then read a response need this: Close above
+// also calls CancelRead, which makes the server's response unreadable. The full
+// Close remains responsible for releasing the stream lease.
+func (c *clientConn) CloseWrite() error {
+	if c.Stream == nil {
+		return nil
+	}
+	return qtls.WrapError(c.Stream.Close())
+}
