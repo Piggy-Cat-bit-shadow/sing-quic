@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/gofrs/uuid/v5 v5.5.1
 	github.com/libp2p/go-nat v1.0.1-0.20250821073202-01afc089f138
-	github.com/sagernet/quic-go v0.61.0-sing-box-mod.6
+	github.com/sagernet/quic-go v0.61.0-sing-box-mod.15
 	github.com/sagernet/sing v0.9.0-beta.4
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.54.0
@@ -31,4 +31,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/sagernet/quic-go => github.com/Piggy-Cat-bit-shadow/quic-go v0.61.1-0.20261116151243-d51ec71bf0dd
+replace github.com/sagernet/quic-go => github.com/Piggy-Cat-bit-shadow/quic-go v0.61.1-0.20261127162329-61b6144fd83e
